@@ -1,0 +1,50 @@
+[package]
+name = "whispr"
+version = "0.1.0"
+edition = "2021"
+description = "Whispr Flow clone — push-to-talk dictation for macOS"
+license = "MIT"
+
+[[bin]]
+name = "whispr"
+path = "src/main.rs"
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed" }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+cpal = "0.15"
+hound = "3.5"
+arboard = "3"
+enigo = "0.3"
+
+directories = "5"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+once_cell = "1"
+
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "macros", "migrate"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+tray-icon = "0.21"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24"
+core-foundation = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
