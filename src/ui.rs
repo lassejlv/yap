@@ -21,6 +21,7 @@ use std::time::Duration;
 use crate::config::{Hotkey, SharedSettings, parakeet_dir};
 use crate::history::{RecordingSummary, history_path};
 use crate::state::{CoreCmd, CoreEvent, Phase};
+use crate::updater::{self, UpdateInfo};
 
 const VU_BARS: usize = 7;
 
@@ -67,6 +68,7 @@ pub struct AppModel {
     pub history: Vec<RecordingSummary>,
     pub settings: SharedSettings,
     pub section: SettingsSection,
+    pub update_available: Option<UpdateInfo>,
     core_cmd_tx: Sender<CoreCmd>,
 }
 
@@ -85,6 +87,7 @@ impl AppModel {
             history: Vec::new(),
             settings,
             section: SettingsSection::General,
+            update_available: None,
             core_cmd_tx,
         }
     }
@@ -125,6 +128,10 @@ impl AppModel {
                 self.log = format!("download failed: {e}");
             }
             CoreEvent::Log(s) => self.log = s,
+            CoreEvent::UpdateAvailable(info) => {
+                tracing::info!("update available: {} ({})", info.version, info.url);
+                self.update_available = Some(info);
+            }
         }
     }
 
@@ -290,6 +297,7 @@ struct DetailData {
     download_total: Option<u64>,
     last_transcript: String,
     history: Vec<RecordingSummary>,
+    update_available: Option<UpdateInfo>,
 }
 
 impl Render for SettingsView {
@@ -309,6 +317,7 @@ impl Render for SettingsView {
                 download_total: model.download_total,
                 last_transcript: model.last_transcript.clone(),
                 history: model.history.clone(),
+                update_available: model.update_available.clone(),
             }
         };
 
@@ -370,7 +379,7 @@ fn render_detail(app: Entity<AppModel>, data: DetailData) -> AnyElement {
             data.last_transcript,
         ),
         SettingsSection::History => render_history_section(data.history),
-        SettingsSection::About => render_about_section(),
+        SettingsSection::About => render_about_section(data.update_available),
     };
 
     v_flex()
@@ -634,19 +643,55 @@ fn render_history_section(history: Vec<RecordingSummary>) -> AnyElement {
         .into_any_element()
 }
 
-fn render_about_section() -> AnyElement {
+fn render_about_section(update: Option<UpdateInfo>) -> AnyElement {
     let version: SharedString = env!("CARGO_PKG_VERSION").into();
+
+    let version_row: AnyElement = match update {
+        Some(info) => {
+            let label: SharedString = format!("Yap {} available", info.version).into();
+            let url = info.url.clone();
+            form_row(
+                "Version",
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(theme::text_secondary())
+                            .child(version),
+                    )
+                    .child(
+                        div()
+                            .id("update-badge")
+                            .px_2()
+                            .py(px(2.0))
+                            .rounded_md()
+                            .bg(hsla(11.0 / 360.0, 0.90, 0.55, 0.18))
+                            .border_1()
+                            .border_color(hsla(11.0 / 360.0, 0.90, 0.55, 0.45))
+                            .text_xs()
+                            .text_color(hsla(11.0 / 360.0, 0.95, 0.70, 1.0))
+                            .hover(|s| s.bg(hsla(11.0 / 360.0, 0.90, 0.55, 0.28)))
+                            .on_click(move |_, _, _| updater::open_url(&url))
+                            .child(label),
+                    ),
+            )
+        }
+        None => form_row(
+            "Version",
+            div()
+                .text_sm()
+                .text_color(theme::text_secondary())
+                .child(version),
+        ),
+    };
+
     group_card(
         "About",
         v_flex()
             .gap_2()
-            .child(form_row(
-                "Version",
-                div()
-                    .text_sm()
-                    .text_color(theme::text_secondary())
-                    .child(version),
-            ))
+            .child(version_row)
             .child(divider_line())
             .child(form_row(
                 "Engine",

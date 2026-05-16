@@ -3,6 +3,7 @@
 use crossbeam_channel::{Receiver, Sender, unbounded};
 
 use crate::history::RecordingSummary;
+use crate::updater::UpdateInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
@@ -24,6 +25,7 @@ pub enum CoreEvent {
     DownloadDone,
     DownloadFailed(String),
     Log(String),
+    UpdateAvailable(UpdateInfo),
 }
 
 /// Commands to the core worker thread (audio/STT/download).

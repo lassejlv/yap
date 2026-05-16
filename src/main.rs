@@ -11,6 +11,7 @@ mod stt;
 mod text;
 mod tray;
 mod ui;
+mod updater;
 
 use crossbeam_channel::{Receiver, unbounded};
 use gpui::{
@@ -44,6 +45,8 @@ fn main() {
         bus.core_ev_tx.clone(),
         settings.clone(),
     );
+
+    updater::spawn(bus.core_ev_tx.clone());
 
     let core_ev_rx = bus.core_ev_rx.clone();
     let core_cmd_tx = bus.core_cmd_tx.clone();
