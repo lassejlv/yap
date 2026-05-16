@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#FF9A6B"/>
+      <stop offset="100%" stop-color="#FF5E5E"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dx="0" dy="10" result="offsetblur"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Squircle app-icon background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="url(#bg)"/>
+
+  <!-- Speech bubble with bottom-left tail -->
+  <g filter="url(#shadow)">
+    <path d="M 272 232
+             L 752 232
+             Q 824 232 824 304
+             L 824 600
+             Q 824 672 752 672
+             L 460 672
+             L 320 800
+             L 388 672
+             L 272 672
+             Q 200 672 200 600
+             L 200 304
+             Q 200 232 272 232 Z"
+          fill="#FFFFFF"/>
+  </g>
+
+  <!-- 3 typing dots -->
+  <circle cx="380" cy="452" r="46" fill="#FF5E5E"/>
+  <circle cx="512" cy="452" r="46" fill="#FF5E5E"/>
+  <circle cx="644" cy="452" r="46" fill="#FF5E5E"/>
+</svg>
