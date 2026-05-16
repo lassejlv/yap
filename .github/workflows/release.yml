@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build & attach assets to (e.g. v0.1.0 or 0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: aarch64
+            rust_target: aarch64-apple-darwin
+          - runner: macos-13
+            arch: x86_64
+            rust_target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Resolve tag + version
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}"        >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=${TAG} version=${VERSION}"
+
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Verify Cargo.toml version == tag
+        shell: bash
+        run: |
+          CARGO_VER="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          TAG_VER="${{ steps.tag.outputs.version }}"
+          if [[ "${CARGO_VER}" != "${TAG_VER}" ]]; then
+            echo "::error::Cargo.toml version (${CARGO_VER}) does not match tag (${TAG_VER}). Bump Cargo.toml and re-tag."
+            exit 1
+          fi
+          echo "Cargo.toml version matches tag: ${CARGO_VER}"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.rust_target }}
+          shared-key: release
+
+      - name: Build DMG
+        shell: bash
+        run: |
+          chmod +x scripts/build-dmg.sh
+          ./scripts/build-dmg.sh
+
+      - name: Rename DMG with arch suffix
+        id: dmg
+        shell: bash
+        run: |
+          VER="${{ steps.tag.outputs.version }}"
+          ARCH="${{ matrix.arch }}"
+          SRC="dist/Yap-${VER}.dmg"
+          DST="dist/Yap-${VER}-macos-${ARCH}.dmg"
+          if [[ ! -f "${SRC}" ]]; then
+            echo "::error::Expected ${SRC} not produced by build-dmg.sh"
+            ls -la dist || true
+            exit 1
+          fi
+          mv "${SRC}" "${DST}"
+          shasum -a 256 "${DST}" | tee "${DST}.sha256"
+          echo "path=${DST}"                  >> "$GITHUB_OUTPUT"
+          echo "sha=${DST}.sha256"            >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "${DST}")"    >> "$GITHUB_OUTPUT"
+
+      - name: Verify bundle structure
+        shell: bash
+        run: |
+          APP="dist/Yap.app"
+          test -x "${APP}/Contents/MacOS/yap" || { echo "::error::missing binary"; exit 1; }
+          test -f "${APP}/Contents/Info.plist" || { echo "::error::missing Info.plist"; exit 1; }
+          test -f "${APP}/Contents/Resources/Yap.icns" || { echo "::error::missing icon"; exit 1; }
+          test -f "${APP}/Contents/Frameworks/libonnxruntime.1.17.1.dylib" || { echo "::error::missing onnxruntime"; exit 1; }
+          test -f "${APP}/Contents/Frameworks/libsherpa-onnx-c-api.dylib" || { echo "::error::missing sherpa"; exit 1; }
+          # Confirm rpath is wired so dylibs resolve from the app bundle.
+          otool -l "${APP}/Contents/MacOS/yap" | grep -A2 LC_RPATH | grep -q "@executable_path/../Frameworks" \
+            || { echo "::error::rpath not set"; exit 1; }
+          echo "Bundle OK"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dmg.outputs.name }}
+          path: |
+            ${{ steps.dmg.outputs.path }}
+            ${{ steps.dmg.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach assets to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: |
+            ${{ steps.dmg.outputs.path }}
+            ${{ steps.dmg.outputs.sha }}
+          fail_on_unmatched_files: true
